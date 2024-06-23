@@ -1,0 +1,338 @@
+import java.io.*;
+import java.util.*;
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.net.URL;
+
+class ReturnBookWindow extends JDialog {
+    private JComboBox<String> bookComboBox;
+    private LibraryManager parent;
+
+    public ReturnBookWindow(LibraryManager parent) {
+        super(parent, "Devolver Libro Prestado", true);
+        this.parent = parent;
+        setLayout(new BorderLayout());
+
+        JPanel panel = new JPanel(new GridLayout(2, 1));
+        panel.add(new JLabel("Selecciona el libro a devolver:"));
+        bookComboBox = new JComboBox<>();
+        for (Map.Entry<String, Boolean> entry : parent.borrowedBooks.entrySet()) {
+            if (entry.getValue()) {
+                bookComboBox.addItem(entry.getKey());
+            }
+        }
+        panel.add(bookComboBox);
+        add(panel, BorderLayout.CENTER);
+
+        JButton returnButton = new JButton("Devolver");
+        returnButton.setFocusPainted(false);
+        returnButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                returnBook();
+            }
+        });
+        add(returnButton, BorderLayout.SOUTH);
+
+        pack();
+        setLocationRelativeTo(parent);
+    }
+
+    private void returnBook() {
+        String title = (String) bookComboBox.getSelectedItem();
+        parent.returnBook(title);
+        dispose();
+    }
+}
+
+class BorrowBookWindow extends JDialog {
+    private JComboBox<String> bookComboBox;
+    private LibraryManager parent;
+
+    public BorrowBookWindow(LibraryManager parent) {
+        super(parent, "Pedir Libro Prestado", true);
+        this.parent = parent;
+        setLayout(new BorderLayout());
+
+        JPanel panel = new JPanel(new GridLayout(2, 1));
+        panel.add(new JLabel("Selecciona el libro a pedir prestado:"));
+        bookComboBox = new JComboBox<>();
+        refreshBooks();
+        panel.add(bookComboBox);
+        add(panel, BorderLayout.CENTER);
+
+        JButton borrowButton = new JButton("Pedir prestado");
+        borrowButton.setFocusPainted(false);
+        borrowButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                borrowBook();
+            }
+        });
+        add(borrowButton, BorderLayout.SOUTH);
+
+        pack();
+        setLocationRelativeTo(parent);
+    }
+
+    private void refreshBooks() {
+        bookComboBox.removeAllItems();
+        for (Map.Entry<String, Boolean> entry : parent.borrowedBooks.entrySet()) {
+            if (!entry.getValue()) {
+                bookComboBox.addItem(entry.getKey());
+            }
+        }
+    }
+
+    private void borrowBook() {
+        String title = (String) bookComboBox.getSelectedItem();
+        parent.borrowBook(title);
+        refreshBooks();
+        dispose();
+    }
+}
+
+class LibraryManager extends JFrame {
+    private JLabel imageLabel;
+    public Map<String, Boolean> borrowedBooks;
+
+    public LibraryManager() {
+        super("Gestor de Biblioteca");
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setSize(600, 600); // Ajustar el tamaño de la ventana principal
+        setLocationRelativeTo(null);
+
+        JPanel mainPanel = new JPanel(new BorderLayout());
+        add(mainPanel);
+
+        JPanel imagePanel = new JPanel();
+        imagePanel.setLayout(new BoxLayout(imagePanel, BoxLayout.Y_AXIS));
+        ImageIcon icon = createImageIcon("/icon.png");
+        if (icon != null) {
+            Image image = icon.getImage().getScaledInstance(600, 400, Image.SCALE_SMOOTH);
+            imageLabel = new JLabel(new ImageIcon(image));
+            imageLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            imagePanel.add(imageLabel);
+        } else {
+            JLabel errorLabel = new JLabel("Imagen no encontrada");
+            errorLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+            imagePanel.add(errorLabel);
+        }
+        mainPanel.add(imagePanel, BorderLayout.NORTH);
+
+        JLabel welcomeLabel = new JLabel("Bienvenido al Gestor de Biblioteca");
+        welcomeLabel.setHorizontalAlignment(SwingConstants.CENTER);
+        mainPanel.add(welcomeLabel, BorderLayout.CENTER);
+
+        JPanel buttonPanel = new JPanel(new GridLayout(4, 1, 10, 10)); // Agregar espaciado entre botones
+        JButton addBookButton = new JButton("Agregar libro");
+        addBookButton.setFocusPainted(false);
+        addBookButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openAddBookWindow();
+            }
+        });
+        buttonPanel.add(addBookButton);
+
+        JButton viewBooksButton = new JButton("Consultar libros");
+        viewBooksButton.setFocusPainted(false);
+        viewBooksButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openViewBooksWindow();
+            }
+        });
+        buttonPanel.add(viewBooksButton);
+
+        JButton borrowBookButton = new JButton("Pedir libro prestado");
+        borrowBookButton.setFocusPainted(false);
+        borrowBookButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openBorrowBookWindow();
+            }
+        });
+        buttonPanel.add(borrowBookButton);
+
+        JButton returnBookButton = new JButton("Devolver libro prestado");
+        returnBookButton.setFocusPainted(false);
+        returnBookButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                openReturnBookWindow();
+            }
+        });
+        buttonPanel.add(returnBookButton);
+
+        mainPanel.add(buttonPanel, BorderLayout.SOUTH);
+
+        borrowedBooks = new HashMap<>();
+        loadData();
+    }
+
+    private ImageIcon createImageIcon(String path) {
+        try {
+            URL url = getClass().getResource(path);
+            if (url != null) {
+                System.out.println("URL de la imagen: " + url); // Verifica la URL en la consola
+                return new ImageIcon(url);
+            } else {
+                System.err.println("No se encontró la imagen en el classpath: " + path);
+                return null;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private void loadData() {
+        try (FileInputStream fileIn = new FileInputStream("library_data.json");
+             ObjectInputStream in = new ObjectInputStream(fileIn)) {
+            borrowedBooks = (Map<String, Boolean>) in.readObject();
+        } catch (IOException | ClassNotFoundException e) {
+            borrowedBooks = new HashMap<>();
+        }
+    }
+
+    private void saveData() {
+        try (FileOutputStream fileOut = new FileOutputStream("library_data.json");
+             ObjectOutputStream out = new ObjectOutputStream(fileOut)) {
+            out.writeObject(borrowedBooks);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void openAddBookWindow() {
+        AddBookWindow addBookWindow = new AddBookWindow(this);
+        addBookWindow.setVisible(true);
+    }
+
+    private void openViewBooksWindow() {
+        ViewBooksWindow viewBooksWindow = new ViewBooksWindow(this);
+        viewBooksWindow.setVisible(true);
+    }
+
+    private void openBorrowBookWindow() {
+        BorrowBookWindow borrowBookWindow = new BorrowBookWindow(this);
+        borrowBookWindow.setVisible(true);
+    }
+
+    private void openReturnBookWindow() {
+        ReturnBookWindow returnBookWindow = new ReturnBookWindow(this);
+        returnBookWindow.setVisible(true);
+    }
+
+    public void addBook(String title, String author) {
+        if (!title.isEmpty() && !author.isEmpty()) {
+            borrowedBooks.put(title, false);
+            saveData();
+            JOptionPane.showMessageDialog(this, "Libro agregado correctamente.");
+        } else {
+            JOptionPane.showMessageDialog(this, "Por favor, completa todos los campos.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    public void borrowBook(String title) {
+        if (borrowedBooks.containsKey(title)) {
+            if (!borrowedBooks.get(title)) {
+                borrowedBooks.put(title, true);
+                saveData();
+                JOptionPane.showMessageDialog(this, "Has pedido prestado el libro '" + title + "'.");
+            } else {
+                JOptionPane.showMessageDialog(this, "El libro '" + title + "' ya ha sido prestado.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "El libro '" + title + "' no está disponible en la biblioteca.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    public void returnBook(String title) {
+        if (borrowedBooks.containsKey(title)) {
+            if (borrowedBooks.get(title)) {
+                borrowedBooks.put(title, false);
+                saveData();
+                JOptionPane.showMessageDialog(this, "Has devuelto el libro '" + title + "'.");
+            } else {
+                JOptionPane.showMessageDialog(this, "El libro '" + title + "' no ha sido prestado.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+            }
+        } else {
+            JOptionPane.showMessageDialog(this, "El libro '" + title + "' no está disponible en la biblioteca.", "Advertencia", JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    public static void main(String[] args) {
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                LibraryManager libraryManager = new LibraryManager();
+                libraryManager.setVisible(true);
+            }
+        });
+    }
+}
+
+class AddBookWindow extends JDialog {
+    private JTextField titleField;
+    private JTextField authorField;
+    private LibraryManager parent;
+
+    public AddBookWindow(LibraryManager parent) {
+        super(parent, "Agregar Libro", true);
+        this.parent = parent;
+        setLayout(new GridLayout(3, 2));
+
+        add(new JLabel("Título:"));
+        titleField = new JTextField();
+        add(titleField);
+
+        add(new JLabel("Autor:"));
+        authorField = new JTextField();
+        add(authorField);
+
+        JButton addButton = new JButton("Agregar");
+        addButton.setFocusPainted(false);
+        addButton.addActionListener(new ActionListener() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                addBook();
+            }
+        });
+        add(new JLabel());
+        add(addButton);
+
+        pack();
+        setLocationRelativeTo(parent);
+    }
+
+    private void addBook() {
+        String title = titleField.getText();
+        String author = authorField.getText();
+        parent.addBook(title, author);
+        dispose();
+    }
+}
+
+class ViewBooksWindow extends JDialog {
+    private LibraryManager parent;
+
+    public ViewBooksWindow(LibraryManager parent) {
+        super(parent, "Consultar Libros", true);
+        this.parent = parent;
+        setLayout(new BorderLayout());
+
+        JPanel panel = new JPanel(new GridLayout(parent.borrowedBooks.size() + 1, 1));
+        panel.add(new JLabel("Lista de libros:"));
+        for (Map.Entry<String, Boolean> entry : parent.borrowedBooks.entrySet()) {
+            String status = entry.getValue() ? "Prestado" : "Disponible"; // Corregir la expresión ternaria aquí
+            panel.add(new JLabel("Título: " + entry.getKey() + ", Estado: " + status));
+        }
+        add(panel, BorderLayout.CENTER);
+
+        pack();
+        setLocationRelativeTo(parent);
+    }
+}
